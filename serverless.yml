@@ -1,0 +1,109 @@
+service: crawlReview
+
+provider:
+  name: aws
+  runtime: python3.6
+  stage: dev
+  profile: desker_admin
+  region: ap-northeast-2
+  
+  memorySize: 1024 # Optional, in MB, default is 1024
+  timeout: 200 # optional, in seconds, default is 6
+  versionFunctions: True # Optional, default is True
+
+  environment:
+    DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+
+package:
+  include:
+    - presentor.py
+    - crawl/**
+    - db/**
+  exclude:
+    - requirements.txt
+    - serverless.yml
+    - README.md
+    - LICENSE.txt
+
+functions:
+  presentor:
+    handler: presentor.handler # Required, handler set in AWS Lambda
+    description: crawl review in Shopping web sites
+    memorySize: 1024 # Optional, in MB, default is 1024
+    timeout: 30 # Optional, in seconds, default is 6 (max=30)
+
+    events:
+      - http:
+          # instead of / you can define any HTPP path you like
+          # since we just have one endpoint I used /
+          path: /
+          method: get
+
+  create:
+    handler: db/create.create
+    events:
+      - http:
+          path: db
+          method: post
+          cors: true
+
+  list:
+    handler: db/list.list
+    events:
+      - http:
+          path: db
+          method: get
+          cors: true
+
+  get:
+    handler: db/get.get
+    events:
+      - http:
+          path: db/{id}
+          method: get
+          cors: true
+
+  update:
+    handler: db/update.update
+    events:
+      - http:
+          path: db/{id}
+          method: put
+          cors: true
+
+  delete:
+    handler: db/delete.delete
+    events:
+      - http:
+          path: db/{id}
+          method: delete
+          cors: true
+
+# resources:
+#   Resources:
+#     todosDynamoDbTable:
+#       Type: 'AWS::DynamoDB::Table'
+#       DeletionPolicy: Retain
+#       Properties:
+#         AttributeDefinitions:
+#           -
+#             AttributeName: id
+#             AttributeType: S
+#         KeySchema:
+#           -
+#             AttributeName: id
+#             KeyType: HASH
+#         ProvisionedThroughput:
+#           ReadCapacityUnits: 1
+#           WriteCapacityUnits: 1
+#         TableName: ${self:provider.environment.DYNAMODB_TABLE}
